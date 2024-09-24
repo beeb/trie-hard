@@ -143,6 +143,185 @@ static HEADERS_PHF: phf::Set<&str> = phf_set! {
         "x-xss-protection",
 };
 
+static SMALL_PHF: phf::Set<&str> = phf_set! {
+    ";",
+    "?",
+    "",
+    "\"All",
+    "a",
+    "age",
+    "alchemy.",
+    "alike,",
+    "all",
+    "All",
+    "and",
+    "And",
+    "ants",
+    "are",
+    "art",
+    "as",
+    "Ask",
+    "asks",
+    "be",
+    "Be",
+    "beams",
+    "bed",
+    "blinded",
+    "both",
+    "BUSY",
+    "but",
+    "But",
+    "call",
+    "Call",
+    "center",
+    "chide",
+    "clime,",
+    "cloud",
+    "compared",
+    "contracted",
+    "could",
+    "country",
+    "court-huntsmen",
+    "curtains,",
+    "days,",
+    "do",
+    "done",
+    "dost",
+    "duties",
+    "ease,",
+    "eclipse",
+    "else",
+    "everywhere",
+    "eyes",
+    "fool,",
+    "for",
+    "go",
+    "Go",
+    "half",
+    "happy",
+    "harvest",
+    "have",
+    "hear,",
+    "her",
+    "here",
+    "honour's",
+    "hours,",
+    "I",
+    "If",
+    "in",
+    "In",
+    "Indias",
+    "is,",
+    "is",
+    "king",
+    "kings",
+    "knows",
+    "late",
+    "Late",
+    "lay.\"",
+    "left'st",
+    "lie",
+    "long.",
+    "Look,",
+    "lose",
+    "Love,",
+    "lovers'",
+    "me,",
+    "me.",
+    "mimic,",
+    "mine",
+    "months,",
+    "motions",
+    "Must",
+    "no",
+    "nor",
+    "Nor",
+    "not",
+    "Nothing",
+    "of",
+    "offices",
+    "old",
+    "on",
+    "one",
+    "or",
+    "pedantic",
+    "play",
+    "prentices,",
+    "princes",
+    "Princes",
+    "rags",
+    "reverend,",
+    "ride,",
+    "run",
+    "Saucy",
+    "saw'st",
+    "school-boys",
+    "season",
+    "seasons",
+    "shalt",
+    "She's",
+    "Shine",
+    "shouldst",
+    "sight",
+    "since",
+    "so",
+    "sour",
+    "sphere.",
+    "spice",
+    "states,",
+    "strong",
+    "Sun,",
+    "tell",
+    "th'",
+    "that's",
+    "that",
+    "the",
+    "them,",
+    "them",
+    "these",
+    "thine,",
+    "Thine",
+    "think",
+    "this,",
+    "This",
+    "those",
+    "Thou,",
+    "thou",
+    "through",
+    "Through",
+    "thus,",
+    "thus",
+    "thy",
+    "Thy",
+    "time.",
+    "to-morrow",
+    "to",
+    "To",
+    "unruly",
+    "us,",
+    "us.",
+    "us",
+    "walls",
+    "warm",
+    "warming",
+    "we,",
+    "wealth",
+    "where",
+    "Whether",
+    "which",
+    "whom",
+    "Why",
+    "will",
+    "windows,",
+    "wink,",
+    "with",
+    "world,",
+    "world's",
+    "would",
+    "wretch,",
+    "yesterday,",
+};
+
 const PERCENT: &[i32] = &[100, 75, 50, 25, 10, 5, 2, 1];
 
 fn main() {
@@ -215,21 +394,21 @@ fn hashmap_get(bencher: divan::Bencher, input: &Input) {
         );
 }
 
-#[divan::bench(args = args())]
+#[divan::bench(args = args_small())]
 fn phf_get(bencher: divan::Bencher, input: &Input) {
     bencher
         .with_inputs(|| {
-            let words = match input.size {
-                Size::Header => get_header_text(),
-                Size::Big => get_big_text(),
-                Size::Small => get_small_text(),
+            let (words, phf) = match input.size {
+                Size::Header => (get_header_text(), &HEADERS_PHF),
+                Size::Small => (get_small_text(), &SMALL_PHF),
+                Size::Big => unreachable!(),
             };
-            generate_samples(&words, input.percent)
+            (generate_samples(&words, input.percent), phf)
         })
-        .bench_values(|samples: Vec<&str>| {
+        .bench_values(|(samples, phf): (Vec<&str>, &phf::Set<&str>)| {
             samples
                 .iter()
-                .filter_map(|w| HEADERS_PHF.get_key(black_box(&w[..])))
+                .filter_map(|w| phf.get_key(black_box(&w[..])))
                 .count()
         });
 }
@@ -271,7 +450,7 @@ fn hashmap_insert(bencher: divan::Bencher, size: &Size) {
 /*                                   INPUTS                                   */
 /* -------------------------------------------------------------------------- */
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum Size {
     Header,
     Big,
@@ -301,6 +480,19 @@ fn args() -> impl Iterator<Item = Input> {
             size: Size::Big,
             percent: *p,
         }))
+        .chain(PERCENT.iter().map(|p| Input {
+            size: Size::Small,
+            percent: *p,
+        }))
+}
+
+fn args_small() -> impl Iterator<Item = Input> {
+    PERCENT
+        .iter()
+        .map(|p| Input {
+            size: Size::Header,
+            percent: *p,
+        })
         .chain(PERCENT.iter().map(|p| Input {
             size: Size::Small,
             percent: *p,
